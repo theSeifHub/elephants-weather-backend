@@ -1,39 +1,102 @@
-import { Controller, Get, HttpService, Param  } from '@nestjs/common';
-// import { AppService } from './app.service';
+import { Controller, Get, Param  } from '@nestjs/common';
+import { WeatherService } from './weather.service';
 
 @Controller()
 export class AppController {
-  private readonly apiKey: string;
-  constructor(private readonly httpService: HttpService) {
-    this.apiKey = 'c9661625b3eb09eed099288fbfad560a';
-  }
+  constructor(private readonly weatherService: WeatherService) {};
 
-  @Get(':city/:date')
+    // Returns an object of multiple values & variations of dates used as requests' parameters 
+    createDatesPack(dateInMilliseconds: string) {
+      const dateMs = parseInt(dateInMilliseconds),
+            requestDayStr = new Date(dateMs).toDateString(),
+            requestDayMs = new Date(requestDayStr).getTime(),
+            requestDaySec = Math.round(requestDayMs / 1000),
+            todayStr = new Date().toDateString(),
+            todayMs = new Date(todayStr).getTime(),
+            firstAvailableDay = new Date(todayMs - 518400000).getTime(),
+            lastAvailableDay = new Date(todayMs + 691200000).getTime();
+      return {
+        requestDayStr,
+        requestDayMs,
+        requestDaySec,
+        todayStr,
+        todayMs,
+        firstAvailableDay,
+        lastAvailableDay
+      }
+    }
+
+  @Get(':location/:dateMs')
   async getWeather(@Param() params): Promise<any> {
-    console.log(params.city);
-    console.log(params.date);
-    let res =  await this.httpService.get(
-      `https://api.openweathermap.org/data/2.5/weather?q=${params.city}&appid=${this.apiKey}`
-    ).toPromise();
-    const {lon, lat} = res.data.coord;
-    console.log(lon, lat);
-    const city = `${res.data.name}, ${res.data.sys.country}`
-    res = await this.httpService.get(
-      `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&appid=${this.apiKey}`
-    ).toPromise();
-    return {
-      city,
-      date: `${params.date}`,
-      weather: Array.from(res.data.daily, (day:any) => {
-        let date = new Date(day.dt*1000).toDateString()
-        return {
-        date,
-        'wthr': day.weather[0]
-      }})
-    };
+    const datePack = this.createDatesPack(params.dateMs);
+
+    if (datePack.requestDayMs === datePack.todayMs) {
+      // Get today weather
+      console.log("\nGETTING TODAY\n#############\n");//! Server Logging
+      const todayWeather =  await this.weatherService.getToday(params.location);
+      if (todayWeather.requestSuccess) {
+        return todayWeather;
+      }
+      // In case of any error
+      return {
+        message: "Failure"
+      }
+
+
+    } else if (datePack.requestDayMs < datePack.todayMs && datePack.requestDayMs >= datePack.firstAvailableDay ) {
+      // Get History
+      console.log("\nGETTING HISTORY\n###############\n");//! Server Logging
+      const coords =  await this.weatherService.getCoords(params.location);
+      if (coords.requestSuccess) {
+        const {lat, lon, city} = coords;
+        const history =  await this.weatherService.getHistory(lat, lon, datePack.requestDaySec);
+        if (history.requestSuccess) {
+          const {day, description, icon} = history;
+          return {
+            message: "Success",
+            city,
+            day,
+            description,
+            icon
+          }
+        }
+      }
+      // In case of any error
+      return {
+        message: "Failure"
+      }
+
+
+    } else if (datePack.requestDayMs > datePack.todayMs && datePack.requestDayMs <= datePack.lastAvailableDay ) {
+      // Get future forecast
+      console.log("\nGETTING FORECAST\n################\n");//! Server Logging
+      const coords =  await this.weatherService.getCoords(params.location);
+      if (coords.requestSuccess) {
+        const {lat, lon, city} = coords;
+        const forecast =  await this.weatherService.getForecast(lat, lon, datePack.requestDayStr);
+        if (forecast.requestSuccess) {
+          const {day, description, icon} = forecast;
+          return {
+            message: "Success",
+            city,
+            day,
+            description,
+            icon
+          }
+        }
+      }
+      // In case of any error
+      return {
+        message: "Failure"
+      }
+
+
+    } else {
+      // In case of any error
+      console.log("\nWeather unavailable\n###################\n");//! Server Logging
+      return {
+        message: "Failure"
+      }
+    }
   }
 }
-// One call
-// https://api.openweathermap.org/data/2.5/onecall?lat=26.82&lon=30.8&appid=c9661625b3eb09eed099288fbfad560a
-// Icon
-// https://openweathermap.org/img/wn/13d@4x.png

@@ -16,20 +16,20 @@ export class WeatherService {
       const city = `${res.data.name}, ${res.data.sys.country}`;
       const {lon, lat} = res.data.coord;
       return {
-        message: "Success",
+        requestSuccess: true,
         city,
         lat,
         lon
-      }
-    };
+      };
+    }
     // if no data is returned
     return {
-      message: new Error("Invalid Location")
+      requestSuccess: false
     };
   }
 
   // Get today's weather
-  async getTodays(location) {
+  async getToday(location) {
     const res =  await this.httpService.get(
       `https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${this.apiKey}`
     ).toPromise();
@@ -37,70 +37,70 @@ export class WeatherService {
     if (res.data && res.data.cod === 200) {
       const city = `${res.data.name}, ${res.data.sys.country}`;
       const day = new Date(res.data.dt*1000).toDateString();
-      const {description, icon} = res.data.weather;
+      const {description, icon} = res.data.weather[0];
+      console.log(description);
+      console.log(icon);
       return {
-        message: "Success",
+        requestSuccess: true,
         city,
         day,
         description,
         icon
-      }
-    };
+      };
+    }
     // if no data is returned
     return {
-      message: new Error("Invalid Location")
-    }
+      requestSuccess: false
+    };
   }
 
-  // Get future forecast up to seven days
-  async getForecast(lat: number, lon: number, dayToLook: string){
+  // Get future daily forecast within seven days
+  async getForecast(lat: number, lon: number, dayToLook: string) {
     let res =  await this.httpService.get(
       `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&appid=${this.apiKey}`
     ).toPromise();
     if (res.data) {
-      res.data.daily.forEach(day => {
+      for (const day of res.data.daily) {
         const dateString = new Date(day.dt*1000).toDateString();
         if (dayToLook === dateString) {
-          const {description, icon} = day.weather;
+          const {description, icon} = day.weather[0];
           return {
-           message: "Success",
+            requestSuccess: true,
             day: dateString,
             description,
             icon
-          }
+          };
         }
-      });
+      }
     }
-
     // if no data is returned
     return {
-      message: new Error("Forecast unavailable for this date")
-    }
+      requestSuccess: false
+    };
   }
 
-  // Get past history 
-  async getHistory(lat: number, lon: number, dayMs: number) {
+  // Get past history of up to 5 days ago
+  async getHistory(lat: number, lon: number, daySec: number) {
     let res =  await this.httpService.get(
-      `https://api.openweathermap.org/data/2.5/onecall/timemachine?lat=${lat}&lon=${lon}&dt=${dayMs}&appid=${this.apiKey}`
+      `https://api.openweathermap.org/data/2.5/onecall/timemachine?lat=${lat}&lon=${lon}&dt=${daySec}&appid=${this.apiKey}`
     ).toPromise();
     if (res.data) {
-      const dayToLook = new Date(dayMs).toDateString();
+      const dayToLook = new Date(daySec*1000).toDateString();
       const dateString = new Date(res.data.current.dt*1000).toDateString();
       if (dayToLook === dateString) {
-          const {description, icon} = res.data.current.weather;
+          const {description, icon} = res.data.current.weather[0];
           return {
-           message: "Success",
+            requestSuccess: true,
             day: dateString,
             description,
             icon
-          }
+          };
         }
       }
       // if no data is returned
       return {
-        message: new Error("History unavailable for this date")
-      }
-    };
+        requestSuccess: false
+      };
+    }
   }
-
-
+  
